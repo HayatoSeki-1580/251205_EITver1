@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EIT Learning Workbench (Point Plot Graph)</title>
+    <title>EIT Learning Workbench (Line & Point Graph)</title>
     
     <!-- MathJax -->
     <script>
@@ -247,7 +247,7 @@
         <div class="data-section">
             <div class="control-group">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <label style="margin:0;">ジュール発熱の収束 (点プロット)</label>
+                    <label style="margin:0;">ジュール発熱の収束 (点+線)</label>
                     <div class="chart-controls">
                         <button class="chart-btn" onclick="setChartZoom('full')">全期間</button>
                         <button class="chart-btn" onclick="setChartZoom('tail')">収束付近</button>
@@ -666,10 +666,20 @@ function updateCharts() {
     }
 
     if(!jouleChart) {
-        const ctxJ = document.getElementById('jouleChartCanvas').getContext('2d');
-        jouleChart = new Chart(ctxJ, {
-            type: 'scatter',
-            data: { datasets: [{ label: 'Joule Heating', data: jouleHistory, borderColor: '#dc2626', backgroundColor: '#dc2626', borderWidth:0, pointRadius: 2, showLine: false }] },
+        jouleChart = new Chart(document.getElementById('jouleChartCanvas').getContext('2d'), {
+            type: 'line',
+            data: { 
+                datasets: [{ 
+                    label: 'Joule Heating', 
+                    data: jouleHistory, 
+                    borderColor: '#dc2626', 
+                    backgroundColor: '#dc2626', 
+                    borderWidth: 1.5, 
+                    pointRadius: 2,   
+                    fill: false,
+                    tension: 0        
+                }] 
+            },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 layout: { padding: { left: 10, right: 10, top: 10, bottom: 5 } },
@@ -677,7 +687,8 @@ function updateCharts() {
                 scales: { 
                     x: { type: 'linear', title: { display: true, text: '反復回数 (Loop)' } },
                     y: { type: 'linear', title: { display: true, text: '総発熱量 (W)' } }
-                }
+                },
+                animation: false
             }
         });
     } else {
@@ -698,7 +709,6 @@ function updateCharts() {
                 jouleChart.options.scales.x.min = start;
                 jouleChart.options.scales.x.max = len;
                 
-                // Calc Y range
                 let min = Infinity, max = -Infinity;
                 for(let i = jouleHistory.length - 1; i >= 0; i--) {
                     const p = jouleHistory[i];
@@ -708,8 +718,13 @@ function updateCharts() {
                 }
                 if(min !== Infinity) {
                     const margin = (max-min)*0.1;
-                    jouleChart.options.scales.y.min = min - margin;
-                    jouleChart.options.scales.y.max = max + margin;
+                    if(margin === 0) {
+                         jouleChart.options.scales.y.min = min - 1;
+                         jouleChart.options.scales.y.max = max + 1;
+                    } else {
+                         jouleChart.options.scales.y.min = min - margin;
+                         jouleChart.options.scales.y.max = max + margin;
+                    }
                 }
             }
         }
