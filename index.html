@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EIT Learning Workbench (Point Plot Graph)</title>
+    
+    <!-- MathJax -->
+    <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }
+    };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --panel-bg: #ffffff;
+            --text-color: #334155;
+            --primary-color: #2563eb;
+            --border-color: #e2e8f0;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header { text-align: center; margin-bottom: 20px; }
+        h1 { margin: 0; font-size: 1.6rem; color: #0f172a; }
+        .subtitle { color: #64748b; font-size: 0.9rem; }
+
+        .workbench {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 20px;
+            max-width: 1280px;
+            width: 100%;
+            align-items: start;
+            margin-bottom: 40px;
+        }
+        @media (max-width: 900px) { .workbench { grid-template-columns: 1fr; } }
+
+        .panel {
+            background: var(--panel-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .panel-header {
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #f1f5f9;
+            color: #1e293b;
+        }
+
+        /* Controls */
+        .control-group { margin-bottom: 15px; }
+        .control-group label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 5px; color: #475569; }
+        select, input[type="range"] { 
+            width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 0.9rem; background: #fff;
+        }
+        
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        button {
+            padding: 8px; border: 1px solid #cbd5e1; background: #fff;
+            border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.2s;
+            color: #475569;
+        }
+        button:hover { background: #f1f5f9; }
+        button.active { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+        button.action-btn { background-color: #fff; border-color: #cbd5e1; }
+
+        /* Canvas */
+        .canvas-container {
+            position: relative;
+            align-self: center;
+            margin: 10px 0;
+            display: flex; justify-content: center;
+        }
+        
+        .circle-canvas { border-radius: 50%; border: 1px solid #e2e8f0; cursor: crosshair; background: #fff; }
+        .rect-canvas { border-radius: 0; background: #fff; }
+
+        .legend { display: flex; justify-content: center; gap: 10px; font-size: 0.75rem; margin-top: 10px; }
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        .data-section { margin-top: 20px; padding-top: 15px; border-top: 1px solid #e2e8f0; }
+        
+        .click-instruction {
+            text-align: center; font-size: 0.85rem; color: #64748b; background: #f8fafc;
+            padding: 8px; border-radius: 4px; margin-top: 10px; border: 1px solid #e2e8f0;
+        }
+
+        /* Loading & Status */
+        #progressOverlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.9); z-index: 50;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            border-radius: 8px;
+        }
+        .progress-text { font-weight: bold; color: var(--primary-color); margin-bottom: 5px; }
+        .progress-sub { font-size: 0.8rem; color: #64748b; font-family: monospace; }
+        .spinner {
+            width: 30px; height: 30px; border: 3px solid #e2e8f0; border-top: 3px solid var(--primary-color);
+            border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 10px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .slider-row { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; margin-top: 5px; }
+        .slider-val { width: 50px; text-align: right; font-family: monospace; }
+        
+        .chart-container { position: relative; height: 200px; width: 100%; margin-bottom: 10px; }
+        .chart-controls { display: flex; justify-content: flex-end; gap: 5px; margin-bottom: 5px; }
+        .chart-btn { padding: 2px 8px; font-size: 0.75rem; height: auto; }
+
+        /* Log Scale Legend */
+        .colorbar-container {
+            position: absolute; right: 0; bottom: 0; width: 60px; height: 100px;
+            display: flex; flex-direction: column; align-items: center; font-size: 0.7rem;
+            background: rgba(255,255,255,0.85); padding: 5px;
+            border-radius: 4px 0 0 0; pointer-events: none;
+            border-top: 1px solid #e2e8f0; border-left: 1px solid #e2e8f0;
+        }
+        .colorbar-gradient { flex-grow: 1; width: 10px; margin: 4px 0; background: linear-gradient(to top, blue, cyan, lime, yellow, red); }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>EIT Learning Workbench</h1>
+    <p class="subtitle">物理シミュレーション：導電率分布と電流・電位の関係</p>
+</header>
+
+<div class="workbench">
+    
+    <!-- LEFT PANEL -->
+    <div class="panel">
+        <div class="panel-header">1. 設定 & ファントム</div>
+        
+        <div class="control-group">
+            <label>メッシュ解像度 (Resolution)</label>
+            <select id="resSelect" onchange="resetSystem()">
+                <option value="12">中 (Rings=12)</option>
+                <option value="20" selected>高 (Rings=20)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>収束判定: ジュール熱の変化率閾値</label>
+            <select id="thresholdSelect">
+                <option value="1e-4">1e-4 (粗い)</option>
+                <option value="1e-5" selected>1e-5 (標準)</option>
+                <option value="1e-6">1e-6 (厳密)</option>
+                <option value="1e-7">1e-7 (非常に厳密)</option>
+            </select>
+            <div style="font-size:0.75rem; color:#666; margin-top:3px;">
+                ※ 変化率が閾値を下回ると計算を完了します
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>描画ツール (Conductivity)</label>
+            <div class="btn-group">
+                <button onclick="setMode('increase')" id="btnInc" class="active">絶縁体 (青)</button>
+                <button onclick="setMode('decrease')" id="btnDec">良導体 (赤)</button>
+            </div>
+            
+            <div class="slider-row">
+                <span style="color:blue; width:40px;">絶縁</span>
+                <input type="range" id="sliderInsulator" min="0" max="6" step="0.1" value="4" oninput="updateSliderLabels()">
+                <span id="valInsulator" class="slider-val">1e-4</span>
+            </div>
+            <div class="slider-row">
+                <span style="color:red; width:40px;">導電</span>
+                <input type="range" id="sliderConductor" min="1" max="6" step="0.1" value="5" oninput="updateSliderLabels()">
+                <span id="valConductor" class="slider-val">100k</span>
+            </div>
+
+            <div class="btn-group" style="margin-top:15px;">
+                <button onclick="applyPreset('tumor')">腫瘍モデル</button>
+                <button onclick="applyPreset('lungs')">肺モデル</button>
+            </div>
+            <button onclick="applyReset()" style="width:100%; color:#c0392b; border-color:#f5b7b1; background:#fdfefe;">クリア (Clear)</button>
+        </div>
+
+        <div class="canvas-container">
+            <canvas id="phantomCanvas" class="circle-canvas" width="280" height="280"></canvas>
+        </div>
+        <div class="legend">
+            <div class="legend-item"><div class="dot" style="background:blue"></div>高抵抗</div>
+            <div class="legend-item"><div class="dot" style="background:#f0f9ff; border:1px solid #ddd;"></div>基準</div>
+            <div class="legend-item"><div class="dot" style="background:red"></div>低抵抗</div>
+        </div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="panel">
+        <div id="progressOverlay">
+            <div class="spinner"></div>
+            <div class="progress-text">物理計算を実行中...</div>
+            <div class="progress-sub" id="progressStatus">Loop: 0 | Diff: -</div>
+        </div>
+
+        <div class="panel-header">
+            2. 物理場の可視化 (Physics)
+            <select id="viewMode" style="width:auto; font-size:0.9rem;" onchange="renderVis()">
+                <option value="both" selected>電位 + 電流ベクトル</option>
+                <option value="density">電流密度 (Log Heatmap)</option>
+                <option value="vectors">電流ベクトルのみ (Arrows)</option>
+                <option value="potential">電位のみ (Potential)</option>
+            </select>
+        </div>
+
+        <div class="canvas-container" style="width:100%; max-width:500px;">
+            <canvas id="physicsCanvas" class="circle-canvas" width="500" height="500" style="width:100%; height:auto;"></canvas>
+            
+            <div id="densityLegend" class="colorbar-container" style="display:none;">
+                <span>High</span>
+                <div class="colorbar-gradient"></div>
+                <span>Low</span>
+                <span style="margin-top:2px; font-size:0.6rem;">(Log Scale)</span>
+            </div>
+        </div>
+
+        <div class="click-instruction">
+            電流経路: <span id="injectLabel" style="font-weight:bold; font-family:monospace; color:#2563eb;">0 → 8</span>
+            <span style="font-size:0.8rem; color:#666; margin-left:5px;">(図の番号をクリックして変更)</span>
+        </div>
+
+        <div class="data-section">
+            <div class="control-group">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label style="margin:0;">ジュール発熱の収束 (点プロット)</label>
+                    <div class="chart-controls">
+                        <button class="chart-btn" onclick="setChartZoom('full')">全期間</button>
+                        <button class="chart-btn" onclick="setChartZoom('tail')">収束付近</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="jouleChartCanvas" class="rect-canvas"></canvas>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label>境界電圧プロファイル</label>
+                <div class="chart-container" style="height: 140px;">
+                    <canvas id="chartCanvas" class="rect-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// --- Config & State ---
+const SECTORS = 16;
+const BASE_SIGMA = 1.0;
+const CANVAS_SIZE_P = 280;
+const CANVAS_SIZE_M = 500;
+
+let RINGS = 20;
+let mesh = {};
+let phantomSigma = [];
+let currentInjectionPair = {src:0, sink:8};
+let selectionStep = 0;
+let potentials = [];
+let gradients = []; 
+let jouleHistory = []; 
+let currentZoomMode = 'full'; // 'full' or 'tail'
+
+// UI Params
+let insulatorVal = 0.0001;
+let conductorVal = 100000.0;
+
+// Contexts
+const ctxPh = document.getElementById('phantomCanvas').getContext('2d');
+const ctxPhy = document.getElementById('physicsCanvas').getContext('2d');
+let voltageChart, jouleChart;
+
+// --- Initialization ---
+function init() {
+    updateSliderLabels();
+    resetSystem();
+}
+
+function resetSystem() {
+    RINGS = parseInt(document.getElementById('resSelect').value);
+    generateMesh();
+    phantomSigma = new Float32Array(mesh.elements.length).fill(BASE_SIGMA);
+    startSolver();
+    drawPhantom();
+}
+
+function updateSliderLabels() {
+    const exp = parseFloat(document.getElementById('sliderInsulator').value);
+    insulatorVal = Math.pow(10, -exp);
+    document.getElementById('valInsulator').innerText = insulatorVal.toExponential(0);
+
+    const expC = parseFloat(document.getElementById('sliderConductor').value);
+    conductorVal = Math.pow(10, expC);
+    let textC = conductorVal.toFixed(0);
+    if(conductorVal >= 1000) textC = (conductorVal/1000).toFixed(0) + 'k';
+    if(conductorVal >= 1000000) textC = (conductorVal/1000000).toFixed(0) + 'M';
+    document.getElementById('valConductor').innerText = textC;
+}
+
+// --- Mesh ---
+function generateMesh() {
+    mesh.nodes = []; mesh.elements = []; mesh.centers = [];
+    mesh.nodes.push({x:0, y:0});
+    for(let r=1; r<=RINGS; r++) {
+        const radius = 1.0 * r / RINGS;
+        for(let i=0; i<SECTORS; i++) {
+            const th = 2 * Math.PI * i / SECTORS;
+            mesh.nodes.push({x: radius*Math.cos(th), y: radius*Math.sin(th)});
+        }
+    }
+    for(let i=0; i<SECTORS; i++) mesh.elements.push([0, i+1, (i+1)%SECTORS+1]);
+    for(let r=1; r<RINGS; r++) {
+        const inBase = 1+(r-1)*SECTORS;
+        const outBase = 1+r*SECTORS;
+        for(let i=0; i<SECTORS; i++) {
+            const nxt = (i+1)%SECTORS;
+            mesh.elements.push([inBase+i, outBase+i, outBase+nxt]);
+            mesh.elements.push([inBase+i, outBase+nxt, inBase+nxt]);
+        }
+    }
+    mesh.centers = mesh.elements.map(el => {
+        const n1=mesh.nodes[el[0]], n2=mesh.nodes[el[1]], n3=mesh.nodes[el[2]];
+        return {x:(n1.x+n2.x+n3.x)/3, y:(n1.y+n2.y+n3.y)/3};
+    });
+}
+
+// --- Physics Solver (Async with Progress) ---
+let solverState = { running: false, x: null, r: null, p: null, rsold: 0, iter: 0, K: null, F: null };
+
+function startSolver() {
+    if(solverState.running) return; 
+    
+    document.getElementById('progressOverlay').style.display = 'flex';
+    document.getElementById('injectLabel').innerText = `${currentInjectionPair.src} → ${currentInjectionPair.sink}`;
+
+    const N = mesh.nodes.length;
+    const K = new Float32Array(N*N).fill(0);
+    
+    // Assembly with Area sign check
+    for(let e=0; e<mesh.elements.length; e++) {
+        const el = mesh.elements[e];
+        const s = phantomSigma[e];
+        const n1=mesh.nodes[el[0]], n2=mesh.nodes[el[1]], n3=mesh.nodes[el[2]];
+        
+        // Stiffness Matrix uses Abs area (Energy is scalar)
+        const A = 0.5 * Math.abs(n1.x*(n2.y-n3.y) + n2.x*(n3.y-n1.y) + n3.x*(n1.y-n2.y));
+        if(A<1e-12) continue;
+        
+        const b = [n2.y-n3.y, n3.y-n1.y, n1.y-n2.y];
+        const c = [n3.x-n2.x, n1.x-n3.x, n2.x-n1.x];
+        for(let i=0; i<3; i++) {
+            for(let j=0; j<3; j++) {
+                K[el[i]*N + el[j]] += s * (b[i]*b[j] + c[i]*c[j]) / (4*A);
+            }
+        }
+    }
+
+    const F = new Float32Array(N).fill(0);
+    const offset = 1 + (RINGS-1)*SECTORS;
+    K[0] += 1e9; F[0] = 0; 
+    F[offset + currentInjectionPair.src] = 1.0;
+    F[offset + currentInjectionPair.sink] = -1.0;
+
+    let x = new Float32Array(N);
+    const srcNode = mesh.nodes[offset + currentInjectionPair.src];
+    const sinkNode = mesh.nodes[offset + currentInjectionPair.sink];
+    for(let i=0; i<N; i++) {
+        const n = mesh.nodes[i];
+        const dSrc = Math.hypot(n.x - srcNode.x, n.y - srcNode.y) + 0.05;
+        const dSink = Math.hypot(n.x - sinkNode.x, n.y - sinkNode.y) + 0.05;
+        x[i] = -Math.log(dSrc) + Math.log(dSink);
+    }
+
+    let r = new Float32Array(N);
+    for(let i=0; i<N; i++) {
+        let Kxi = 0; for(let j=0; j<N; j++) Kxi += K[i*N+j]*x[j];
+        r[i] = F[i] - Kxi;
+    }
+    let p = new Float32Array(r);
+    let rsold = 0; for(let val of r) rsold += val*val;
+
+    jouleHistory = [];
+    solverState = { running: true, x, r, p, rsold, iter: 0, K, F, N };
+    requestAnimationFrame(solverLoop);
+}
+
+function solverLoop() {
+    if(!solverState.running) return;
+
+    const { N, K } = solverState;
+    const chunkSize = 50; 
+    const maxIter = 10000; 
+    const tolerance = parseFloat(document.getElementById('thresholdSelect').value);
+
+    let converged = false;
+    let diffRatio = 1.0;
+
+    for(let k=0; k<chunkSize; k++) {
+        let Ap = new Float32Array(N);
+        for(let i=0; i<N; i++) {
+            let s=0; for(let j=0; j<N; j++) s+=K[i*N+j]*solverState.p[j];
+            Ap[i]=s;
+        }
+        
+        let pAp = 0; for(let i=0; i<N; i++) pAp += solverState.p[i]*Ap[i];
+        if(Math.abs(pAp)<1e-20) { converged=true; break; }
+
+        let alpha = solverState.rsold / pAp;
+        for(let i=0; i<N; i++) {
+            solverState.x[i] += alpha * solverState.p[i];
+            solverState.r[i] -= alpha * Ap[i];
+        }
+        
+        let rsnew = 0; for(let val of solverState.r) rsnew += val*val;
+        if(rsnew < 1e-20) { converged=true; break; }
+
+        let beta = rsnew / solverState.rsold;
+        for(let i=0; i<N; i++) solverState.p[i] = solverState.r[i] + beta * solverState.p[i];
+        
+        solverState.rsold = rsnew;
+        solverState.iter++;
+
+        if(solverState.iter % 10 === 0) {
+            let P = 0;
+            for(let i=0; i<N; i++) P += solverState.F[i] * solverState.x[i];
+            jouleHistory.push({x: solverState.iter, y: P});
+
+            // Convergence check using ONLY threshold (minimum buffer of 20 points for stability)
+            if(jouleHistory.length > 20) {
+                const prev = jouleHistory[jouleHistory.length-10].y;
+                diffRatio = Math.abs(P - prev) / (Math.abs(P) + 1e-9);
+                if(diffRatio < tolerance) converged = true;
+            }
+        }
+    }
+
+    const lastJoule = jouleHistory.length > 0 ? jouleHistory[jouleHistory.length-1].y.toFixed(4) : "-";
+    document.getElementById('progressStatus').innerText = 
+        `Iter: ${solverState.iter} | Joule: ${lastJoule} | ΔRatio: ${diffRatio.toExponential(1)}`;
+
+    // Update charts periodically during calculation
+    if(solverState.iter % 100 === 0) {
+        updateCharts();
+    }
+
+    if(converged || solverState.iter >= maxIter) {
+        finishSolver();
+    } else {
+        requestAnimationFrame(solverLoop);
+    }
+}
+
+function finishSolver() {
+    solverState.running = false;
+    document.getElementById('progressOverlay').style.display = 'none';
+    potentials = solverState.x;
+    
+    gradients = [];
+    for(let e=0; e<mesh.elements.length; e++) {
+        const el = mesh.elements[e];
+        const n1=mesh.nodes[el[0]], n2=mesh.nodes[el[1]], n3=mesh.nodes[el[2]];
+        
+        // Use SIGNED area for correct vector direction
+        const signedA = 0.5 * (n1.x*(n2.y-n3.y) + n2.x*(n3.y-n1.y) + n3.x*(n1.y-n2.y));
+        const A = Math.abs(signedA); 
+        
+        const b = [n2.y-n3.y, n3.y-n1.y, n1.y-n2.y];
+        const c = [n3.x-n2.x, n1.x-n3.x, n2.x-n1.x];
+        let dvdx=0, dvdy=0;
+        for(let k=0; k<3; k++) { dvdx += b[k]*potentials[el[k]]; dvdy += c[k]*potentials[el[k]]; }
+        const sigma = phantomSigma[e];
+        
+        if (Math.abs(signedA) > 1e-12) {
+            gradients.push({ vx: -dvdx/(2*signedA) * sigma, vy: -dvdy/(2*signedA) * sigma });
+        } else {
+            gradients.push({ vx: 0, vy: 0 });
+        }
+    }
+
+    renderVis();
+    updateCharts();
+}
+
+// --- Visualization ---
+function renderVis() {
+    const canvas = document.getElementById('physicsCanvas');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    const scale = w/2.2, off = w/2;
+    ctx.clearRect(0,0,w,h);
+    
+    const mode = document.getElementById('viewMode').value;
+    const showDensity = (mode === 'density');
+    const showPot = (mode === 'potential' || mode === 'both');
+    const showVectors = (mode === 'vectors' || mode === 'both');
+    
+    document.getElementById('densityLegend').style.display = showDensity ? 'flex' : 'none';
+
+    if (showDensity) drawDensity(ctx, scale, off);
+    else if (showPot) drawPotential(ctx, scale, off);
+
+    if (showVectors) drawVectors(ctx, scale, off);
+    
+    drawElectrodes(ctx, scale, off);
+}
+
+function drawPotential(ctx, scale, off) {
+    let maxV = 0; for(let v of potentials) if(Math.abs(v)>maxV) maxV=Math.abs(v);
+    if(maxV<1e-5) maxV=1;
+    for(let e=0; e<mesh.elements.length; e++) {
+        const el = mesh.elements[e];
+        const vAvg = (potentials[el[0]] + potentials[el[1]] + potentials[el[2]])/3;
+        const norm = vAvg/maxV; 
+        let r=255, g=255, b=255;
+        if(norm > 0) { g=b=255*(1-Math.pow(Math.min(1,norm),0.7)); }
+        else { r=g=255*(1-Math.pow(Math.min(1,Math.abs(norm)),0.7)); }
+        const n1=mesh.nodes[el[0]], n2=mesh.nodes[el[1]], n3=mesh.nodes[el[2]];
+        ctx.beginPath();
+        ctx.moveTo(n1.x*scale+off, n1.y*scale+off); ctx.lineTo(n2.x*scale+off, n2.y*scale+off); ctx.lineTo(n3.x*scale+off, n3.y*scale+off);
+        ctx.fillStyle = `rgb(${r|0},${g|0},${b|0})`; ctx.fill();
+    }
+}
+
+function drawDensity(ctx, scale, off) {
+    let mags = gradients.map(g => Math.hypot(g.vx, g.vy));
+    let minJ=1e9, maxJ=0;
+    for(let m of mags) { if(m>maxJ) maxJ=m; if(m>1e-15 && m<minJ) minJ=m; }
+    if(maxJ<1e-9) maxJ=1e-9; if(minJ>maxJ) minJ=maxJ*0.001;
+    const logMin=Math.log10(minJ), logMax=Math.log10(maxJ), range=logMax-logMin;
+
+    for(let e=0; e<mesh.elements.length; e++) {
+        let val = 0;
+        if(mags[e]>minJ) { val = (Math.log10(mags[e])-logMin)/range; if(val>1) val=1; }
+        const h = (1.0-val)*240;
+        const n1=mesh.nodes[mesh.elements[e][0]], n2=mesh.nodes[mesh.elements[e][1]], n3=mesh.nodes[mesh.elements[e][2]];
+        ctx.beginPath();
+        ctx.moveTo(n1.x*scale+off, n1.y*scale+off); ctx.lineTo(n2.x*scale+off, n2.y*scale+off); ctx.lineTo(n3.x*scale+off, n3.y*scale+off);
+        ctx.fillStyle = `hsl(${h},100%,50%)`; ctx.fill();
+    }
+}
+
+function drawVectors(ctx, scale, off) {
+    let avgMag = 0; gradients.forEach(g => avgMag += Math.hypot(g.vx, g.vy));
+    avgMag /= gradients.length; if(avgMag < 1e-15) avgMag=1;
+
+    for(let e=0; e<mesh.elements.length; e++) {
+        const c = mesh.centers[e];
+        const g = gradients[e];
+        const mag = Math.hypot(g.vx, g.vy);
+        
+        if (mag < 1e-20) continue;
+
+        const intensity = mag / (avgMag * 2.0);
+        
+        let opacity = 0.4 + Math.min(intensity, 1.0) * 0.6;
+        let lineWidth = 0.5 + Math.min(intensity, 1.0) * 1.5;
+        let len = 8 + Math.min(intensity, 1.0) * 8; 
+
+        const angle = Math.atan2(g.vy, g.vx);
+        const cx = c.x * scale + off;
+        const cy = c.y * scale + off;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        ctx.moveTo(-len/2, 0);
+        ctx.lineTo(len/2, 0);
+        ctx.lineTo(len/2 - 3, -2);
+        ctx.moveTo(len/2, 0);
+        ctx.lineTo(len/2 - 3, 2);
+        
+        ctx.strokeStyle = `rgba(0,0,0,${opacity})`;
+        ctx.lineWidth = lineWidth;
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+function drawElectrodes(ctx, scale, off) {
+    const offset = 1 + (RINGS-1)*SECTORS;
+    ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for(let i=0; i<SECTORS; i++) {
+        const n = mesh.nodes[offset+i];
+        const x = n.x*scale+off, y = n.y*scale+off;
+        ctx.beginPath();
+        const isSrc = (i===currentInjectionPair.src), isSink = (i===currentInjectionPair.sink);
+        const rad = (isSrc || isSink) ? 10 : 6;
+        ctx.arc(x, y, rad, 0, Math.PI*2);
+        if(isSrc) { ctx.fillStyle='red'; ctx.strokeStyle='#b91c1c'; ctx.lineWidth=2; }
+        else if(isSink) { ctx.fillStyle='blue'; ctx.strokeStyle='#1d4ed8'; ctx.lineWidth=2; }
+        else { ctx.fillStyle='#f1f5f9'; ctx.strokeStyle='#94a3b8'; ctx.lineWidth=1; }
+        ctx.fill(); ctx.stroke();
+        if(isSrc || isSink) { ctx.fillStyle='white'; ctx.fillText(i, x, y); }
+    }
+}
+
+// --- Phantom Drawing ---
+function drawPhantom() {
+    drawMesh(ctxPh, phantomSigma, CANVAS_SIZE_P);
+}
+function drawMesh(ctx, sigma, size) {
+    const scale = size/2.2, off = size/2;
+    ctx.clearRect(0,0,size,size);
+    const eps = 0.01;
+    for(let e=0; e<mesh.elements.length; e++) {
+        const el = mesh.elements[e];
+        const n1=mesh.nodes[el[0]], n2=mesh.nodes[el[1]], n3=mesh.nodes[el[2]];
+        const s = sigma[e];
+        let col = '#f0f9ff'; 
+        if(s < BASE_SIGMA - eps) col = `rgba(0,0,255,0.8)`; 
+        else if(s > BASE_SIGMA + eps) col = `rgba(255,0,0,0.8)`; 
+        
+        ctx.beginPath();
+        ctx.moveTo(n1.x*scale+off, n1.y*scale+off); ctx.lineTo(n2.x*scale+off, n2.y*scale+off); ctx.lineTo(n3.x*scale+off, n3.y*scale+off);
+        ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+    }
+}
+
+// --- Charts ---
+function setChartZoom(mode) {
+    currentZoomMode = mode;
+    updateCharts();
+}
+
+function updateCharts() {
+    const offset = 1 + (RINGS-1)*SECTORS;
+    const boundaryV = [], labels = [];
+    for(let i=0; i<SECTORS; i++) { boundaryV.push(potentials[offset+i]); labels.push(i); }
+
+    if(!voltageChart) {
+        const ctxV = document.getElementById('chartCanvas').getContext('2d');
+        voltageChart = new Chart(ctxV, {
+            type: 'line',
+            data: { labels: labels, datasets: [{ label: 'Current V', data: boundaryV, borderColor: '#2563eb', tension:0.3, pointBackgroundColor:'#2563eb' }] },
+            options: { responsive:true, maintainAspectRatio:false, layout:{padding:{left:10,right:10,top:5,bottom:5}}, plugins:{legend:{display:false}}, scales:{y:{title:{display:true, text:'電圧 (V)'}}, x:{title:{display:true, text:'電極 #'}}} }
+        });
+    } else {
+        voltageChart.data.datasets[0].data = boundaryV;
+        voltageChart.update();
+    }
+
+    if(!jouleChart) {
+        const ctxJ = document.getElementById('jouleChartCanvas').getContext('2d');
+        jouleChart = new Chart(ctxJ, {
+            type: 'scatter',
+            data: { datasets: [{ label: 'Joule Heating', data: jouleHistory, borderColor: '#dc2626', backgroundColor: '#dc2626', borderWidth:0, pointRadius: 2, showLine: false }] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                layout: { padding: { left: 10, right: 10, top: 10, bottom: 5 } },
+                plugins: { legend: { display: false } },
+                scales: { 
+                    x: { type: 'linear', title: { display: true, text: '反復回数 (Loop)' } },
+                    y: { type: 'linear', title: { display: true, text: '総発熱量 (W)' } }
+                }
+            }
+        });
+    } else {
+        jouleChart.data.datasets[0].data = jouleHistory;
+        
+        // Auto-scale logic for Tail Mode
+        const len = jouleHistory.length;
+        if (len > 0) {
+            if (currentZoomMode === 'full') {
+                jouleChart.options.scales.x.min = 0;
+                jouleChart.options.scales.x.max = len;
+                jouleChart.options.scales.y.min = undefined;
+                jouleChart.options.scales.y.max = undefined;
+            } else {
+                const windowSize = Math.min(len * 0.3, 2000);
+                const start = Math.max(0, len - windowSize);
+                
+                jouleChart.options.scales.x.min = start;
+                jouleChart.options.scales.x.max = len;
+                
+                // Calc Y range
+                let min = Infinity, max = -Infinity;
+                for(let i = jouleHistory.length - 1; i >= 0; i--) {
+                    const p = jouleHistory[i];
+                    if(p.x < start) break;
+                    if(p.y < min) min = p.y;
+                    if(p.y > max) max = p.y;
+                }
+                if(min !== Infinity) {
+                    const margin = (max-min)*0.1;
+                    jouleChart.options.scales.y.min = min - margin;
+                    jouleChart.options.scales.y.max = max + margin;
+                }
+            }
+        }
+        
+        jouleChart.update();
+    }
+}
+
+// --- Interaction ---
+let brushMode = 'increase';
+function setMode(m){ 
+    brushMode=m; 
+    document.getElementById('btnInc').className = m==='increase'?'active':'';
+    document.getElementById('btnDec').className = m==='decrease'?'active':'';
+}
+function applyPreset(type) {
+    phantomSigma.fill(BASE_SIGMA);
+    if(type==='tumor') mesh.centers.forEach((c,i)=>{ if(Math.hypot(c.x-0.4, c.y-0.2)<0.25) phantomSigma[i]=insulatorVal; });
+    else if (type==='lungs') mesh.centers.forEach((c,i)=>{ if(Math.hypot(c.x-0.4, c.y)<0.35) phantomSigma[i]=insulatorVal; if(Math.hypot(c.x+0.4, c.y)<0.35) phantomSigma[i]=insulatorVal; });
+    startSolver(); drawPhantom();
+}
+function applyReset(){ phantomSigma.fill(BASE_SIGMA); startSolver(); drawPhantom(); }
+
+const cvsPh = document.getElementById('phantomCanvas');
+let isDraw=false;
+cvsPh.addEventListener('mousedown', (e)=>{isDraw=true; mod(e)});
+cvsPh.addEventListener('mousemove', (e)=>{if(isDraw) mod(e)});
+cvsPh.addEventListener('mouseup', ()=>{isDraw=false; startSolver();});
+function mod(e) {
+    const r = cvsPh.getBoundingClientRect();
+    const x = (e.clientX-r.left - 140)/(280/2.2);
+    const y = (e.clientY-r.top - 140)/(280/2.2);
+    const val = brushMode==='increase' ? insulatorVal : conductorVal; 
+    let hit=false;
+    for(let i=0; i<mesh.elements.length; i++) {
+        const c=mesh.centers[i];
+        if(Math.hypot(c.x-x, c.y-y)<0.2) { phantomSigma[i]=val; hit=true; }
+    }
+    if(hit) drawPhantom();
+}
+
+const cvsPhy = document.getElementById('physicsCanvas');
+cvsPhy.addEventListener('mousedown', (e) => {
+    const r = cvsPhy.getBoundingClientRect();
+    const w = 500, scale = w/2.2, off = w/2;
+    const rectScale = w / r.width;
+    const mx = (e.clientX - r.left) * rectScale, my = (e.clientY - r.top) * rectScale;
+    const offset = 1 + (RINGS-1)*SECTORS;
+    for(let i=0; i<SECTORS; i++) {
+        const n = mesh.nodes[offset+i];
+        if(Math.hypot(mx-(n.x*scale+off), my-(n.y*scale+off)) < 30) {
+            if(selectionStep === 0) { currentInjectionPair.src = i; selectionStep = 1; }
+            else { if(i !== currentInjectionPair.src) { currentInjectionPair.sink = i; selectionStep = 0; } }
+            startSolver(); break;
+        }
+    }
+});
+
+// Initial Run
+init();
+</script>
+</body>
+</html>
